@@ -58,7 +58,7 @@ int connect_server()
 	memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
 	inet_pton(AF_INET, SERVER_ADDR, &server_addr.sin_addr);//IP地址设置成INADDR_ANY,让系统自动获取本机的IP地址。
-	server_addr.sin_port = htons(8000);//设置的端口为SERVER_PORT	
+	server_addr.sin_port = htons(SERVER_PORT);//设置的端口为SERVER_PORT	
 
 	if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1)
 	{

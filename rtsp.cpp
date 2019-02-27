@@ -5,12 +5,21 @@
 #include "config.h"
 #include "log.h"
 #include "rtsp.h"
+#include "md5.h"
 
+static std::string method("");
 static std::string realm("");
 static std::string nonce("");
 static std::string username("admin");
-static std::string password("jns12345");
-static char url[255] = {0};
+static std::string password("jns87250605");
+static char uri[255] = {0};
+static std::string track_id("");
+
+unsigned short rtp_server_port = 0;
+unsigned short rtcp_server_port = 0;
+
+unsigned short rtp_client_port = 60000;
+unsigned short rtcp_client_port = 60001;
 
 int get_response_code(const std::string& response)
 {
@@ -72,9 +81,9 @@ std::string get_header_value(const std::string& header, const char* key)
 		return "";
 	std::string sub("");
 	try{
-		sub = header.substr(indexL + 1, indexR - indexL -1);
-		sub.erase(0, sub.find_first_not_of(' '));
-		sub.erase(sub.find_last_not_of(' ') + 1);
+		sub = header.substr(indexL + 1, indexR - indexL -1);		
+		sub.erase(0, sub.find_first_not_of(' '));		
+		sub.erase(sub.find_last_not_of(' ') + 1);		
 	}catch(const std::bad_alloc& ba)
 	{
 		log_error("bad alloc exception\n");
@@ -218,7 +227,7 @@ int rtsp_send_recv(
 			log_debug("data is not enough, continue recv\n");
 			continue;
 		}
-		header_end + 4; //算上\r\n\r\n
+		header_end += 4; //算上\r\n\r\n
 		//没有Content-Length字段，表明数据接收完成
 		if(strstr(recv_buf, "Content-Length") == nullptr)
 		{
@@ -235,6 +244,7 @@ int rtsp_send_recv(
 			log_error("Get Content-Length from header failed\n");
 			return -5;
 		}
+		log_debug("content-length:%s\n", str_content_length.c_str());
 		
 		std::size_t content_length = 0;
 		try{
@@ -260,6 +270,26 @@ int rtsp_send_recv(
 	return recv_num;
 }
 
+std::string get_response(std::string& method)
+{
+	char temp[1024];
+	snprintf(temp, sizeof(temp), "%s:%s:%s", 
+				username.c_str(), realm.c_str(), password.c_str());
+	std::string part1;
+	GetMD5(temp, part1);
+	
+	snprintf(temp, sizeof(temp), "%s:%s", method.c_str(), uri);
+	std::string part3;
+	GetMD5(temp, part3);	
+	
+	snprintf(temp, sizeof(temp), "%s:%s:%s",
+					part1.c_str(), nonce.c_str(), part3.c_str());
+	std::string response;
+	GetMD5(temp, response);
+	
+	return response;
+}
+
 void rtsp_options(int sockfd)
 {
 	char cmd[1024];
@@ -269,7 +299,7 @@ void rtsp_options(int sockfd)
 		"OPTIONS %s RTSP/1.0\r\n"\
 		"CSep: 2\r\n"\
 		"User-Agent: Linux program\r\n\r\n",
-		url);
+		uri);
 		
 	rtsp_send_recv(sockfd, cmd, strlen(cmd), buf, sizeof(buf));
 	log_debug("%s\n", buf);	
@@ -277,25 +307,26 @@ void rtsp_options(int sockfd)
 
 void rtsp_describe(int sockfd)
 {
+	method="DESCRIBE";
 	char cmd[1024];
 	char buf[2048];
 	int num = 0;
 	snprintf(cmd, sizeof(cmd),
-		"DESCRIBE %s RTSP/1.0\r\n"\
+		"%s %s RTSP/1.0\r\n"\
 		"CSep: 3\r\n"\
 		"User-Agent: Linux program\r\n"\
 		"Accept: application/sdp\r\n\r\n",
-		url);
+		method.c_str(), uri);
 		
 	rtsp_send_recv(sockfd, cmd, strlen(cmd), buf, sizeof(buf));
 	log_debug("%s\n", buf);	
 	
-	std::string response(buf);
-	int code = get_response_code(response);
+	std::string recv(buf);
+	int code = get_response_code(recv);
 	log_debug("%s: response code is %d\n", __func__, code);
 	if(code != 401)
 		return;
-	std::string authenticate = get_header_line(response, "WWW-Authenticate");
+	std::string authenticate = get_header_line(recv, "WWW-Authenticate");
 	if(authenticate.empty())
 		return;
 	log_debug("authenticate= %s\n", authenticate.c_str());
@@ -309,30 +340,102 @@ void rtsp_describe(int sockfd)
 		return;
 	log_debug("realm= %s\n", realm.c_str());
 	
+	std::string response = get_response(method);
+	log_debug("response=%s\n", response.c_str());
 }
 
 void rtsp_describe_authorized(int sockfd)
 {
-	char cmd[1024];
-	char buf[2048];
+	method = "DESCRIBE";
+	char send_buf[1024];
+	char recv_buf[2048];
 	int num = 0;
-	snprintf(cmd, sizeof(cmd),
-		"DESCRIBE %s RTSP/1.0\r\n"\
-		"CSep: 3\r\n"\
+	std::string response = get_response(method);
+	snprintf(send_buf, sizeof(send_buf),
+		"%s %s RTSP/1.0\r\n"\
+		"CSep: 4\r\n"\
+		"Authorization: Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"\
 		"User-Agent: Linux program\r\n"\
 		"Accept: application/sdp\r\n\r\n",
-		url);
+		method.c_str(), uri,
+		username.c_str(), realm.c_str(), nonce.c_str(),
+		uri, response.c_str());
 		
-	rtsp_send_recv(sockfd, cmd, strlen(cmd), buf, sizeof(buf));
-	log_debug("%s\n", buf);	
+	rtsp_send_recv(sockfd, send_buf, strlen(send_buf), recv_buf, sizeof(recv_buf));
+	log_debug("%s\n", recv_buf);	
+	
+	//提取trackID信息
+	std::string body = get_body(recv_buf);	
+	std::size_t indexL = 0;
+	std::size_t indexR = 0;
+	indexL = body.find("a=x-dimensions");
+	if(indexL == std::string::npos)
+		return;
+	indexL = body.find("rtsp://", indexL);
+	if(indexL == std::string::npos)
+		return;
+	indexR = body.find("\r\n", indexL);
+	if(indexR == std::string::npos)
+		return;
+	track_id = body.substr(indexL, indexR - indexL);
+	log_debug("trackID= %s\n", track_id.c_str());	
+}
+
+int get_server_port(const std::string& header, unsigned short* rtp_port, unsigned short* rtcp_port)
+{
+	std::size_t posL = 0;
+	std::size_t posR = 0;
+	if((posL = header.find("server_port=")) == std::string::npos)
+		return -1;
+	if((posL = header.find("=", posL)) == std::string::npos)
+		return -2;
+	if((posR = header.find("-", posL)) == std::string::npos)
+		return -3;
+	std::string str_port = header.substr(posL + 1, posR - posL -1);
+	unsigned short port = static_cast<unsigned short>(stoi(str_port));
+	*rtp_port = port;
+	
+	posL = posR;
+	if(posR = header.find(";", posL) == std::string::npos)
+		return -4;
+	str_port = header.substr(posL + 1, posR - posL -1);
+	port = static_cast<unsigned short>(stoi(str_port));
+	*rtcp_port = port;
+	return 0;
+}
+
+void rtsp_setup(int sockfd)
+{
+	method = "SETUP";
+	char send_buf[1024];
+	char recv_buf[2048];
+	int num = 0;
+	std::string response = get_response(method);
+	snprintf(send_buf, sizeof(send_buf),
+		"%s %s RTSP/1.0\r\n"\
+		"CSep: 5\r\n"\
+		"Authorization: Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"\
+		"User-Agent: Linux program\r\n"\
+		"Transport: RTP/AVP;unicast;client_port=%d-%d\r\n\r\n",
+		method.c_str(), track_id.c_str(),
+		username.c_str(), realm.c_str(), nonce.c_str(),
+		uri, response.c_str(), rtp_client_port, rtcp_client_port);
+		
+	rtsp_send_recv(sockfd, send_buf, strlen(send_buf), recv_buf, sizeof(recv_buf));
+	log_debug("%s\n", recv_buf);	
+	std::string header(recv_buf);
+	get_server_port(header, &rtp_server_port, &rtcp_server_port);
+	log_debug("rtp_port= %d, rtcp_port= %d\n", rtp_server_port, rtcp_server_port);
 }
 
 void rtsp(int sockfd)
 {
 	
-	snprintf(url, sizeof(url), "rtsp://%s:%d%s", 
+	snprintf(uri, sizeof(uri), "rtsp://%s:%d%s", 
 				SERVER_ADDR, SERVER_PORT, VIDEO_URL);
-	//rtsp_options(sockfd);
-   rtsp_describe(sockfd);
-}
+	rtsp_options(sockfd);
+   rtsp_describe(sockfd);  
+   rtsp_describe_authorized(sockfd); 
+   rtsp_setup(sockfd);
+  }
 
