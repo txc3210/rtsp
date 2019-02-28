@@ -8,11 +8,19 @@
 #include "crtsp.h"
 #include "log.h"
 #include "md5.h"
-#include "rtp.h"
+
 
 //RTP首次发送给摄像头的见面礼
 const unsigned char start_cmd[] = {0xce, 0xfa, 0xed, 0xfe};
 
+/********************************************************
+* 功能：构造函数，初始化相关参数
+* 参数：user, 访问摄像头的帐号
+* 参数：pwd, 访问摄像头的密码
+* 参数：ip, 摄像头的IP地址
+* 参数：port, 摄像头的端口号
+* 返回：无
+********************************************************/
 crtsp::crtsp(
 	const char* user, 
 	const char* pwd,
@@ -89,6 +97,19 @@ int crtsp::start()
 		log_error("%s: rtsp play failed, err= %d\n", __func__, ret);
 		return -7;
 	}
+	return 0;
+}
+
+int crtsp::stop()
+{
+	int ret = teardown();
+	if(ret != 0)
+	{
+		log_error("%s: rtsp teardown failed, err= %d\n", __func__, ret);
+		return -1;
+	}
+	close(sockfd);
+	sockfd = -1;
 	return 0;
 }
 
@@ -380,6 +401,36 @@ int crtsp::play()
 		"User-Agent: Linux program\r\n"\
 		"Session: %s\r\n"
 		"Range: npt=0.000-\r\n\r\n",
+		method.c_str(), track_id.c_str(),
+		username.c_str(), realm.c_str(), nonce.c_str(),
+		uri.c_str(), response.c_str(), session.c_str());
+		
+	log_debug("tcp_send:\n%s", send_buf);
+	int ret = tcp_send(send_buf, len);	
+	if(ret < 0)
+		return -1;
+		
+	ret = tcp_recv(recv_buf, sizeof(recv_buf));
+	if(ret < 0)
+		return -2;	
+	log_debug("tcp_recv:\n%s\n", recv_buf);
+	return 0;
+}
+
+int crtsp::teardown()
+{
+	method = "TEARDOWN";
+	char send_buf[1024];
+	char recv_buf[1024];
+	int num = 0;
+	std::string response = get_response(method);
+	int len = snprintf(send_buf, sizeof(send_buf),
+		"%s %s RTSP/1.0\r\n"\
+		"CSep: 7\r\n"\
+		"Authorization: Digest username=\"%s\", realm=\"%s\", "\
+		"nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"\
+		"User-Agent: Linux program\r\n"\
+		"Session: %s\r\n\r\n",
 		method.c_str(), track_id.c_str(),
 		username.c_str(), realm.c_str(), nonce.c_str(),
 		uri.c_str(), response.c_str(), session.c_str());

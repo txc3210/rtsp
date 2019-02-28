@@ -14,6 +14,7 @@ public:
 		unsigned short port);
 	~crtsp();
 	int start();
+	int stop();
 	
 private:
 	int connect_server();
