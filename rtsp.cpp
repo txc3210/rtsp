@@ -1,10 +1,10 @@
 #include <sys/socket.h>
 #include <cstring>
-#include <string>
 #include <stdexcept>
 #include "config.h"
 #include "log.h"
 #include "rtsp.h"
+#include "rtp.h"
 #include "md5.h"
 
 static std::string method("");
@@ -14,12 +14,33 @@ static std::string username("admin");
 static std::string password("jns87250605");
 static char uri[255] = {0};
 static std::string track_id("");
+static std::string session("");
 
-unsigned short rtp_server_port = 0;
-unsigned short rtcp_server_port = 0;
+static unsigned short rtp_server_port = 60000;
+static unsigned short rtcp_server_port = 60001;
 
-unsigned short rtp_client_port = 60000;
-unsigned short rtcp_client_port = 60001;
+static unsigned short rtp_client_port = 60000;
+static unsigned short rtcp_client_port = 60001;
+
+unsigned short get_rtp_client_port()
+{
+	return rtp_client_port;
+}
+
+unsigned short get_rtcp_client_port()
+{
+	return rtcp_client_port;
+}
+
+unsigned short get_rtp_server_port()
+{
+	return rtp_server_port;
+}
+
+unsigned short get_rtcp_server_port()
+{
+	return rtcp_server_port;
+}
 
 int get_response_code(const std::string& response)
 {
@@ -404,6 +425,22 @@ int get_server_port(const std::string& header, unsigned short* rtp_port, unsigne
 	return 0;
 }
 
+std::string get_session(std::string& header)
+{
+	std::size_t posL = 0;
+	std::size_t posR = 0;
+	if((posL = header.find("Session:")) == std::string::npos)
+		return "";
+	if((posL = header.find(":", posL)) == std::string::npos)
+		return "";
+	if((posR = header.find(";", posL)) == std::string::npos)
+		return "";
+	std::string session = header.substr(posL + 1, posR - posL -1);
+	session.erase(0, session.find_first_not_of(' '));
+	session.erase(session.find_last_not_of(' ') + 1);
+	return session;
+}
+
 void rtsp_setup(int sockfd)
 {
 	method = "SETUP";
@@ -423,6 +460,39 @@ void rtsp_setup(int sockfd)
 		
 	rtsp_send_recv(sockfd, send_buf, strlen(send_buf), recv_buf, sizeof(recv_buf));
 	log_debug("%s\n", recv_buf);	
+	
+	//从响应消息中提取server_port
+	std::string header(recv_buf);
+	get_server_port(header, &rtp_server_port, &rtcp_server_port);
+	log_debug("rtp_port= %d, rtcp_port= %d\n", rtp_server_port, rtcp_server_port);
+	
+	session = get_session(header);
+	log_debug("session: %s\n", session.c_str());
+}
+
+void rtsp_play(int sockfd)
+{
+	method = "PLAY";
+	char send_buf[1024];
+	char recv_buf[2048];
+	int num = 0;
+	std::string response = get_response(method);
+	snprintf(send_buf, sizeof(send_buf),
+		"%s %s RTSP/1.0\r\n"\
+		"CSep: 6\r\n"\
+		"Authorization: Digest username=\"%s\", realm=\"%s\", "\
+		"nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"\
+		"User-Agent: Linux program\r\n"\
+		"Session: %s\r\n"
+		"Range: npt=0.000-\r\n\r\n",
+		method.c_str(), track_id.c_str(),
+		username.c_str(), realm.c_str(), nonce.c_str(),
+		uri, response.c_str(), session.c_str());
+		
+	rtsp_send_recv(sockfd, send_buf, strlen(send_buf), recv_buf, sizeof(recv_buf));
+	log_debug("%s\n", recv_buf);	
+	
+	//从响应消息中提取server_port
 	std::string header(recv_buf);
 	get_server_port(header, &rtp_server_port, &rtcp_server_port);
 	log_debug("rtp_port= %d, rtcp_port= %d\n", rtp_server_port, rtcp_server_port);
@@ -437,5 +507,7 @@ void rtsp(int sockfd)
    rtsp_describe(sockfd);  
    rtsp_describe_authorized(sockfd); 
    rtsp_setup(sockfd);
-  }
+   _rtp_init();
+   rtsp_play(sockfd);
+ }
 

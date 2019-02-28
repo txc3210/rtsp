@@ -12,6 +12,8 @@
 #include "config.h"
 #include "log.h"
 #include "rtsp.h"
+#include "rtp.h"
+#include "crtsp.h"
 
 /*********************************************************
 * 功能：收到kill消息时的处理函数,清理内存，程序退出
@@ -71,8 +73,16 @@ int connect_server()
 
 int main(int argc, char* argv[])
 {
-   int sockfd = connect_server();
-   rtsp(sockfd);   
- 	close(sockfd);
+ //  int sockfd = connect_server();
+ //  rtsp(sockfd);  
+ 	crtsp rt("admin", "jns87250605", "192.168.108.17", 554);
+ 	if(rt.start() < 0)
+ 		exit(0); 	
+ 	
+ 	while(true)
+ 	{
+ 		sleep(1);
+ 	}
+ 	//close(sockfd);
    exit(0);
 }
