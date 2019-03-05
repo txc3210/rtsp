@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
  	
 // 	while(true)
  	{
- 		sleep(10);
+ 		sleep(5);
  	}   
  	rtsp.stop();
 // 	while(true)

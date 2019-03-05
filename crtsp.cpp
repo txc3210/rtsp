@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <thread>
 #include "crtsp.h"
+#include "crtp.h"
 #include "log.h"
 #include "md5.h"
 
@@ -84,10 +85,12 @@ int crtsp::start()
 		return -5;
 	}
 	
-	ret = rtp_init();
+	//ret = rtp_init();
+	crtp rtp(rtsp_ip, rtp_port, rtp_client_port);	
+	ret = rtp.start();
 	if(ret != 0)
 	{
-		log_error("%s: rtp init failed, err= %d\n", __func__, ret);
+		log_error("%s: rtp start failed, err= %d\n", __func__, ret);
 		return -6;
 	}
 	
@@ -394,14 +397,14 @@ int crtsp::play()
 	int num = 0;
 	std::string response = get_response(method);
 	int len = snprintf(send_buf, sizeof(send_buf),
-		"%s %s RTSP/1.0\r\n"\
+		"%s %s/ RTSP/1.0\r\n"\
 		"CSep: 6\r\n"\
 		"Authorization: Digest username=\"%s\", realm=\"%s\", "\
 		"nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"\
 		"User-Agent: Linux program\r\n"\
 		"Session: %s\r\n"
 		"Range: npt=0.000-\r\n\r\n",
-		method.c_str(), track_id.c_str(),
+		method.c_str(), uri.c_str(),
 		username.c_str(), realm.c_str(), nonce.c_str(),
 		uri.c_str(), response.c_str(), session.c_str());
 		
@@ -425,13 +428,13 @@ int crtsp::teardown()
 	int num = 0;
 	std::string response = get_response(method);
 	int len = snprintf(send_buf, sizeof(send_buf),
-		"%s %s RTSP/1.0\r\n"\
+		"%s %s/ RTSP/1.0\r\n"\
 		"CSep: 7\r\n"\
 		"Authorization: Digest username=\"%s\", realm=\"%s\", "\
 		"nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"\
 		"User-Agent: Linux program\r\n"\
 		"Session: %s\r\n\r\n",
-		method.c_str(), track_id.c_str(),
+		method.c_str(), uri.c_str(),
 		username.c_str(), realm.c_str(), nonce.c_str(),
 		uri.c_str(), response.c_str(), session.c_str());
 		
@@ -653,8 +656,8 @@ std::string crtsp::get_session(std::string& header)
 	return session;
 }
 
-
-void rtp_recv_thread(int sockfd)
+/*
+static void rtp_recv_thread(int sockfd)
 {
 	struct sockaddr_in client;
 	char buf[BUFFER_SIZE + 1];
@@ -722,4 +725,4 @@ int crtsp::rtp_init()
 	
 	return 0;
 }
-
+*/
