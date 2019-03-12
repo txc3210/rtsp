@@ -4,3 +4,6 @@ CMakeCache.txt
 Makefile
 rtsp
 *.h264
+*.mp4
+*.jpg
+

@@ -8,6 +8,10 @@
 #include "crtp.h"
 #include "golomb_data.h"
 
+#define MAX_FRAME_NUM		200 // 从摄像头读取多少个NAL数据
+
+std::fstream fs;
+
 //RTP首次发送给摄像头的见面礼
 const unsigned char start_cmd[] = {0xce, 0xfa, 0xed, 0xfe};
 
@@ -27,50 +31,83 @@ int crtp::connect()
 	return 0;
 }
 
-unsigned char NALU[500 * 1024];
+unsigned char NAL[500 * 1024];
+
+unsigned char SPS[100];
+unsigned char PPS[100];
+unsigned char SEI[100];
+
+std::size_t sps_len = 0;
+std::size_t pps_len = 0;
+std::size_t sei_len = 0;
+
+const char flag[4] = {0x00,0x00,0x00,0x01};
 
 int nalu_parse(const unsigned char* payload, std::size_t payload_num)
 {
 	//static fstream fs("data.h264");
-	static bool first_nalu = true;
-	if(!first_nalu)
-		return 0;
+	
+//	static bool first_nalu = true;
+//	if(!first_nalu)
+//		return 0;
 		
+	static bool pack_end = false;
+	static int NAL_num = 0;
+//	if(NAL_num > 6)
+//		return 0;
+		
+	unsigned char FU_indicator = payload[0];		
 	unsigned char FU_header = payload[1];
-	const unsigned char* FU_payload = payload + 1;
-	std::size_t FU_payload_len = payload_num - 1;
+	const unsigned char* FU_payload = payload + 2;
+	std::size_t FU_payload_len = payload_num - 2;
 	static std::size_t offset = 0;
+	static unsigned char NAL_header = 0; // 组装后的NAL单元的头部
 	
-	
-	if(FU_header & 0x80)
+	if(FU_header & 0x80) // NAL的第一个包
 	{
 		log_debug("%s: FU start flag ", __func__);		
+		pack_end = false;
+		offset = 0;
+		NAL_header = (FU_indicator & 0xE0) | (FU_header & 0x1F); 
+		NAL[offset] = NAL_header; // 新的header
+		offset++;
 	}
-	if(FU_header & 0x40)
+	if(FU_header & 0x40) // NAL的最后一个包
 	{
 		log_debug("%s: FU end flag ", __func__);		
-		first_nalu = false;
+		//first_nalu = false;
 		//log_debug("nalu size= %u ", offset);
-		
+		NAL_num ++;
+		pack_end = true;
 	}
 	log_debug(" FU payload size= %d ", payload_num - 1);
 	
 	for(std::size_t num = 0; num < FU_payload_len; num++)
 	{
-		NALU[offset + num] = FU_payload[num];
+		NAL[offset + num] = FU_payload[num];
 	}
 	offset += FU_payload_len;
-	log_debug(" offset= %u", offset);
+	log_debug(" offset= %u\n", offset);
 	
 	if(FU_header & 0x40)
-	{	
+	{
 		
-		std::fstream fs("NALU.h264", std::fstream::out | std::fstream::binary | std::fstream::trunc);
-		fs.write((const char*)NALU, offset);
-		fs.close();
+		//std::fstream fs("NALU.h264", std::fstream::out | std::fstream::binary | std::fstream::ate);
+		if(NAL_num == 1)
+		{
+			fs.write((const char*)flag, 4);
+			fs.write((const char*)SPS, sps_len);
+			fs.write((const char*)flag, 4);
+			fs.write((const char*)PPS, pps_len);
+			fs.write((const char*)flag, 4);
+			fs.write((const char*)SEI, sei_len);
+		}
+		fs.write((const char*)flag, 4);
+		fs.write((const char*)NAL, offset);
+		//fs.close();
 	}
 	
-	return 0;
+	return NAL_num;
 }
 /*
 #include <cmath>
@@ -192,6 +229,7 @@ int pps_parse(const unsigned char* buf, std::size_t size, struct pps_info* pps)
 	int err = 0;
 	pps->pic_parameter_set_id = dat.get_uev(&err);
 	log_debug("\nPPS pic_parameter_set_id= %u\n", pps->pic_parameter_set_id);
+	return 0;
 }
 
 int rtp_pack_parse(const unsigned char* data, std::size_t size)
@@ -212,7 +250,7 @@ int rtp_pack_parse(const unsigned char* data, std::size_t size)
 		std::size_t padding_len = data[size - 1];
 		if((padding_len + 12) > size)
 			return -3;
-		size -= padding_len;
+		size -= padding_len;//这里先不去掉padding data
 	}
 	std::size_t CSRC_num = data[0] & 0x0f;
 	std::size_t payload_offset = 12 + CSRC_num * 4;
@@ -229,28 +267,48 @@ int rtp_pack_parse(const unsigned char* data, std::size_t size)
 	log_debug("Type= %u ", type);
 	if(type == 6)
 	{
-		log_debug(" NAUL\n");
+		log_debug(" NAUL SEI information\n");
+		for(std::size_t i = 0; i < payload_num; i++)
+		{
+			SEI[i] = payload[i];			
+		}
+		sei_len = payload_num;
 	}	
 	else if(type == 7)
 	{
 		struct sps_info sps;
 		sps_parse(payload + 1, payload_num - 1, &sps);
+		
+		for(std::size_t i = 0; i < payload_num; i++)
+		{
+			SPS[i] = payload[i];			
+		}
+		sps_len = payload_num;
 	}
 	else if(type == 8)
 	{
 		struct pps_info pps;
 		pps_parse(payload + 1, payload_num - 1, &pps);
+		
+		for(std::size_t i = 0; i < payload_num; i++)
+		{
+			PPS[i] = payload[i];			
+		}
+		pps_len = payload_num;
 	}
 	else if(type == 28)
 	{
-		nalu_parse(payload, payload_num);
+		return nalu_parse(payload, payload_num);
 		log_debug("\n");
 	}
+	return 0;
 }
 
 
 void rtp_recv_thread(int sockfd)
 {
+	fs.open("NALU.h264", std::fstream::out | std::fstream::binary | std::fstream::trunc);
+
 	struct sockaddr_in client;
 	char buf[BUFFER_SIZE + 1];
 	int num = 0;
@@ -258,19 +316,22 @@ void rtp_recv_thread(int sockfd)
 	socklen_t len = sizeof(struct sockaddr);
 	unsigned long long sum = 0;
 	unsigned int count = 0;
+	int frame_num = 0;
 	while(true)
 	{		
 		num = recvfrom(sockfd, buf, BUFFER_SIZE, 0, reinterpret_cast<struct sockaddr*>(&client), &len);
 		if(num <= 0)
 			break;
-		if(count++ > 3)
-			continue;
+		//if(count++ > 60000)
+		//	continue;
 		sum += static_cast<unsigned long long>(num);
 		//log_debug("%s: recv %llu byte from UDP\r", __func__, sum);
 		void *ptr = buf;
-		rtp_pack_parse(reinterpret_cast<const unsigned char*>(ptr), num);
-		
+		frame_num = rtp_pack_parse(reinterpret_cast<const unsigned char*>(ptr), num);
+		if(frame_num >= MAX_FRAME_NUM)
+			break;		
 	}	
+	log_debug("%s: rtp recv thread finished....\n", __func__);
 }
 
 int crtp::start()

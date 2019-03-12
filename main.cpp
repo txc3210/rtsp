@@ -1,10 +1,13 @@
 #include <cstdio>
 #include <unistd.h>
 #include <signal.h>
+#include <cstring>
 //#include "config.h"
 #include "log.h"
 #include "crtsp.h"
+#include "base64.h"
 
+#include "ffm.h"
 /*********************************************************
 * 功能：收到kill消息时的处理函数,清理内存，程序退出
 * 参数：sig, kill指令后的参数，如kill -3
@@ -37,7 +40,7 @@ static void run_background(void)
 }
 
 int main(int argc, char* argv[])
-{
+{		
  	crtsp rtsp("admin", "jns87250605", "192.168.108.17", 554);
  	if(rtsp.start() < 0)
  		return 0; 	
@@ -49,6 +52,8 @@ int main(int argc, char* argv[])
  	rtsp.stop();
 // 	while(true)
  	{
- 		sleep(5);
+ 		sleep(1);
  	} 
+ 	ffm();
+	return 0;
 }

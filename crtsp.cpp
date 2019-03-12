@@ -350,6 +350,7 @@ int crtsp::describe_authorized()
 		return -5;
 	track_id = body.substr(indexL, indexR - indexL);
 	//log_debug("trackID= %s\n", track_id.c_str());	
+	return 0;
 }
 
 int crtsp::setup()
@@ -394,7 +395,7 @@ int crtsp::play()
 	method = "PLAY";
 	char send_buf[1024];
 	char recv_buf[1024];
-	int num = 0;
+	
 	std::string response = get_response(method);
 	int len = snprintf(send_buf, sizeof(send_buf),
 		"%s %s/ RTSP/1.0\r\n"\
@@ -425,7 +426,7 @@ int crtsp::teardown()
 	method = "TEARDOWN";
 	char send_buf[1024];
 	char recv_buf[1024];
-	int num = 0;
+	
 	std::string response = get_response(method);
 	int len = snprintf(send_buf, sizeof(send_buf),
 		"%s %s/ RTSP/1.0\r\n"\
@@ -632,7 +633,7 @@ int crtsp::get_server_port(const std::string& header, unsigned short* _rtp_port,
 	*_rtp_port = port;
 	
 	posL = posR;
-	if(posR = header.find(";", posL) == std::string::npos)
+	if( (posR = header.find(";", posL) ) == std::string::npos)
 		return -4;
 	str_port = header.substr(posL + 1, posR - posL -1);
 	port = static_cast<unsigned short>(stoi(str_port));
