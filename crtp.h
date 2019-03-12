@@ -153,14 +153,17 @@ public:
 	crtp();
 	crtp(const std::string& server_ip, unsigned short server_port, unsigned short client_port);
 	~crtp();
-	int connect();
+	void init(const std::string& server_ip, unsigned short server_port, unsigned short client_port);
 	int start();
 	int stop();
+	bool is_work_done(){return work_done;};
 	//void rtp_recv_thread(int sockfd);
+	bool work_done; // 指示工作内容是否完成
 	
 private:
 	int sockfd;
 	std::string server_ip;
 	unsigned short server_port;
 	unsigned short client_port;
+	
 };

@@ -114,7 +114,7 @@ int ffm()
 	
 	static AVFormatContext *ic = nullptr;
 	//const char* file = "rtsp://admin:jns87250605@192.168.108.17:554/h264/ch1/main/av_stream";
-	const char* file = "NALU.h264";
+	const char* file = "test.mp4";
 	ret = avformat_open_input(&ic, file, NULL, NULL);
 	if(ret != 0)
 	{

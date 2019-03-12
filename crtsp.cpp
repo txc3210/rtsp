@@ -86,7 +86,8 @@ int crtsp::start()
 	}
 	
 	//ret = rtp_init();
-	crtp rtp(rtsp_ip, rtp_port, rtp_client_port);	
+	//crtp rtp(rtsp_ip, rtp_port, rtp_client_port);	
+	rtp.init(rtsp_ip, rtp_port, rtp_client_port);	
 	ret = rtp.start();
 	if(ret != 0)
 	{
@@ -102,6 +103,7 @@ int crtsp::start()
 	}
 	return 0;
 }
+
 
 int crtsp::stop()
 {

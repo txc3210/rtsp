@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "crtp.h"
 
 #define VIDEO_URL		"/h264/ch1/main/av_stream"
 
@@ -15,6 +16,7 @@ public:
 	~crtsp();
 	int start();
 	int stop();
+	bool is_work_done(){return rtp.is_work_done();};
 	
 private:
 	int connect_server();
@@ -58,4 +60,6 @@ private:
 	std::string password;
 	std::string track_id;
 	std::string session;
+	
+	crtp rtp;
 };

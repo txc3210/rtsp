@@ -45,9 +45,9 @@ int main(int argc, char* argv[])
  	if(rtsp.start() < 0)
  		return 0; 	
  	
-// 	while(true)
+ 	while(!rtsp.is_work_done())
  	{
- 		sleep(5);
+ 		sleep(1);
  	}   
  	rtsp.stop();
 // 	while(true)
