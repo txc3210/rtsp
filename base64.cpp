@@ -126,9 +126,7 @@ int decode(const char* buf, std::size_t len, std::vector<unsigned char>& vec)
 {
 	std::size_t count = len / 4;		
 	unsigned int dat24 = 0; // 24 bit data from 4 base64 chars
-	unsigned char temp = 0;
-		
-	std::size_t offset = 0;		
+	unsigned char temp = 0;	
 	
 	std::size_t num = 0;
 	char* ptr = const_cast<char*>(buf);

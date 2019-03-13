@@ -45,6 +45,7 @@ int write_jpg(AVFrame* frame, int width, int height)
 	}
 	
 	AVCodecContext *codec_cxt = stream->codec;
+	//AVCodecParameters *codec_cxt = stream->codecpar;
 	codec_cxt->codec_id = out_cxt->oformat->video_codec;
 	codec_cxt->codec_type = AVMEDIA_TYPE_VIDEO;
 	codec_cxt->pix_fmt = AV_PIX_FMT_YUVJ420P;
@@ -109,6 +110,7 @@ int ffm()
 {
 	int ret = 0;
 	av_register_all();
+	//avcodec_register_all();
 	ret = avformat_network_init();
 	log_debug("avformat_network_init, ret= %d\n", ret);
 	
