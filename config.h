@@ -15,3 +15,6 @@
 
 #define VIDEO_URL		"/h264/ch1/main/av_stream"
 
+#define RUN_BACKGROUND			1 // 是否在后面运行
+#define PICTURE_INTERVAL			10 //摄像头拍照周期，单位为分钟
+

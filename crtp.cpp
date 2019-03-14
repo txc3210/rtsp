@@ -10,7 +10,25 @@
 
 #define MAX_FRAME_NUM		8 // 从摄像头读取多少个NAL数据
 
-std::fstream fs;
+struct h264_data h264; //用于将视频流数据存储在内存中
+
+int h264_write(const unsigned char* buf, std::size_t size)
+{
+//	static std::size_t offset = 0;
+	if((h264.size + size) >= DATA_SIZE) // 剩余空间不足
+	{
+		log_error("%s: no more buffer\n", __func__);
+		return 0;
+	}
+	for(std::size_t i = 0; i < size; i++)
+	{
+		h264.data[h264.size] = *(buf + i);
+		h264.size++;		
+	}
+//	h264.size = offset + 1;
+	log_debug("h264.size= %u\n", h264.size);
+	return 0;
+}
 
 //RTP首次发送给摄像头的见面礼
 const unsigned char start_cmd[] = {0xce, 0xfa, 0xed, 0xfe};
@@ -28,6 +46,8 @@ crtp::crtp()
 
 crtp::~crtp()
 {
+	if(sockfd > 0)
+		close(sockfd);
 }
 
 void crtp::init(const std::string& _server_ip, unsigned short _server_port, unsigned short _client_port)
@@ -49,11 +69,11 @@ std::size_t sps_len = 0;
 std::size_t pps_len = 0;
 std::size_t sei_len = 0;
 
-static const char frame_begin_flag[4] = {0x00,0x00,0x00,0x01};
+static const unsigned char frame_begin_flag[4] = {0x00,0x00,0x00,0x01};
 
 int nalu_parse(const unsigned char* payload, std::size_t payload_num)
 {
-	static int NAL_num = 0;
+	//static int NAL_num = 0;
 		
 	unsigned char FU_indicator = payload[0];		
 	unsigned char FU_header = payload[1];
@@ -76,7 +96,7 @@ int nalu_parse(const unsigned char* payload, std::size_t payload_num)
 		log_debug("%s: FU end flag ", __func__);		
 		//first_nalu = false;
 		//log_debug("nalu size= %u ", offset);
-		NAL_num ++;
+		h264.NAL_num ++;
 	}
 //	log_debug(" FU payload size= %d ", payload_num - 1);
 	
@@ -88,23 +108,31 @@ int nalu_parse(const unsigned char* payload, std::size_t payload_num)
 	log_debug(" offset= %u\n", offset);
 	
 	if(FU_header & 0x40)
-	{		
-		//std::fstream fs("NALU.h264", std::fstream::out | std::fstream::binary | std::fstream::ate);
-		if(NAL_num == 1)
-		{
-			fs.write((const char*)frame_begin_flag, 4);
-			fs.write((const char*)SPS, sps_len);
-			fs.write((const char*)frame_begin_flag, 4);
-			fs.write((const char*)PPS, pps_len);
-			fs.write((const char*)frame_begin_flag, 4);
-			fs.write((const char*)SEI, sei_len);
+	{				
+		if(h264.NAL_num == 1)
+		{			
+			h264_write(frame_begin_flag, 4);
+			h264_write(SPS, sps_len);
+			h264_write(frame_begin_flag, 4);
+			h264_write(PPS, pps_len);
+			h264_write(frame_begin_flag, 4);
+			h264_write(SEI, sei_len);
 		}
-		fs.write((const char*)frame_begin_flag, 4);
-		fs.write((const char*)NAL, offset);
-		//fs.close();
+		
+		h264_write(frame_begin_flag, 4);
+		h264_write(NAL, offset);
+	
+/*		//将数据保存到mp4文件中
+		if(NAL_num == MAX_FRAME_NUM)
+		{
+			std::fstream fs;
+			fs.open("test.mp4", std::fstream::out | std::fstream::binary | std::fstream::trunc);
+			fs.write((const char*)(h264.data), h264.size);
+			fs.close();			
+		}*/		
 	}
 	
-	return NAL_num;
+	return h264.NAL_num;
 }
 
 //解析SPS信息
@@ -256,7 +284,7 @@ int rtp_pack_parse(const unsigned char* data, std::size_t size)
 
 void rtp_recv_thread(int sockfd, bool* work_done)
 {
-	fs.open("test.mp4", std::fstream::out | std::fstream::binary | std::fstream::trunc);
+	
 
 	struct sockaddr_in client;
 	char buf[BUFFER_SIZE + 1];
@@ -266,6 +294,8 @@ void rtp_recv_thread(int sockfd, bool* work_done)
 	unsigned long long sum = 0;
 
 	int frame_num = 0;
+	h264.size = 0;
+	h264.NAL_num = 0;
 	while(true)
 	{		
 		num = recvfrom(sockfd, buf, BUFFER_SIZE, 0, reinterpret_cast<struct sockaddr*>(&client), &len);

@@ -2,7 +2,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <string>
 #include "log.h"
+#include "crtp.h"
+#include <ctime>
 
 extern "C"
 {
@@ -18,19 +21,31 @@ extern "C"
 }
 #include "ffm.h"
 
+std::string generate_file_name()
+{
+	char name[64];
+	time_t tt;
+	time(&tt);
+	struct tm stm;
+	localtime_r(&tt, &stm);
+	strftime(name, sizeof(name), "./picture/%Y%m%d_%H%M%S.jpg", &stm);	
+	log_debug("filename= %s\n", name);
+	return std::string(name);
+}
+
 int write_jpg(AVFrame* frame, int width, int height)
 {
 	int ret = 0;
-	const char* out_file = "test.jpg";
+	std::string file_name = generate_file_name();
 	AVFormatContext * out_cxt;// = avformat_alloc_context();	
-	avformat_alloc_output_context2(&out_cxt, nullptr, "singlejpeg", out_file);
+	avformat_alloc_output_context2(&out_cxt, nullptr, "singlejpeg", file_name.c_str());
 	if(out_cxt == nullptr)
 	{
 		log_error("%s: avformat_alloc_context failed\n", __func__);
 		return -1;
 	}
 	
-	ret = avio_open(&out_cxt->pb, out_file, AVIO_FLAG_READ_WRITE);
+	ret = avio_open(&out_cxt->pb, file_name.c_str(), AVIO_FLAG_READ_WRITE);
 	if(ret < 0)
 	{
 		log_error("%s: avio_open failed, ret= %d\n", __func__, ret);
@@ -54,7 +69,7 @@ int write_jpg(AVFrame* frame, int width, int height)
 	codec_cxt->time_base.num = 1;
 	codec_cxt->time_base.den = 25;
 	
-	av_dump_format(out_cxt, 0, out_file, 1);
+	av_dump_format(out_cxt, 0, file_name.c_str(), 1);
 	
 	AVCodec* codec = avcodec_find_encoder(codec_cxt->codec_id);
 	if(codec == nullptr)
@@ -106,6 +121,12 @@ int write_jpg(AVFrame* frame, int width, int height)
 	return  0;
 }
 
+int fill_iobuffer(void *, unsigned char* buf, int bufsize)
+{
+	memcpy(buf, h264.data, bufsize);
+	return bufsize;
+}
+
 int ffm()
 {
 	int ret = 0;
@@ -114,10 +135,23 @@ int ffm()
 	ret = avformat_network_init();
 	log_debug("avformat_network_init, ret= %d\n", ret);
 	
-	static AVFormatContext *ic = nullptr;
+	AVFormatContext *ic = nullptr;
 	//const char* file = "rtsp://admin:jns87250605@192.168.108.17:554/h264/ch1/main/av_stream";
 	const char* file = "test.mp4";
-	ret = avformat_open_input(&ic, file, NULL, NULL);
+	//*************************************************************************************
+	ic = avformat_alloc_context();
+	if(ic == nullptr)
+	{
+		log_error("%s: avformat_alloc_context failed\n", __func__);
+		return -1;
+	}
+	std::size_t avio_ctx_buffer_size = DATA_SIZE;
+	unsigned char* avio_ctx_buffer = (unsigned char*)av_malloc(avio_ctx_buffer_size);
+	AVIOContext* avio_cxt = avio_alloc_context(avio_ctx_buffer, avio_ctx_buffer_size, 0, nullptr, fill_iobuffer, nullptr, nullptr);
+	ic->pb = avio_cxt;
+	ret = avformat_open_input(&ic, NULL, NULL, NULL);
+	//*************************************************************************************
+	//ret = avformat_open_input(&ic, file, NULL, NULL);
 	if(ret != 0)
 	{
 		log_error("%s: avformat open input failed, ret= %d\n", __func__, ret);
@@ -145,7 +179,7 @@ int ffm()
 	}
 	log_debug("\n");
 	
-	av_dump_format(ic, 0, "av.mp4", 0);
+	//av_dump_format(ic, 0, "av.mp4", 0);
 	int video_index = -1;
 	for(unsigned int i = 0; i < ic->nb_streams; i++)
 	{

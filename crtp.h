@@ -147,6 +147,15 @@ struct pps_info{
 	*/
 };
 
+#define DATA_SIZE	512 * 1024
+struct h264_data
+{
+	unsigned char data[DATA_SIZE];
+	std::size_t size;
+	std::size_t NAL_num;
+};
+extern struct h264_data h264; //用于将视频流数据存储在内存中
+
 class crtp
 {
 public:
