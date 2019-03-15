@@ -20,6 +20,7 @@ extern "C"
 #include <libswresample/swresample.h>
 }
 #include "ffm.h"
+#include "raii.h"
 
 /****************************************************************
 * 功能：根据当前时间生成图片的文件名称
@@ -48,6 +49,7 @@ int write_jpg(AVFrame* frame, int width, int height)
 		log_error("%s: avformat_alloc_context failed\n", __func__);
 		return -1;
 	}
+	AVFormatContext_memory_guard guard(&out_cxt); // 自动释放内存
 	
 	ret = avio_open(&out_cxt->pb, file_name.c_str(), AVIO_FLAG_READ_WRITE);
 	if(ret < 0)
@@ -55,6 +57,7 @@ int write_jpg(AVFrame* frame, int width, int height)
 		log_error("%s: avio_open failed, ret= %d\n", __func__, ret);
 		return -2;
 	}
+	AVIOContext_close_guard avio_close_guard(&(out_cxt->pb)); // RAII自动关闭对象
 	
 	AVStream* stream = avformat_new_stream(out_cxt, nullptr);
 	if(stream == nullptr)
@@ -94,15 +97,29 @@ int write_jpg(AVFrame* frame, int width, int height)
    int size = codec_cxt->width * codec_cxt->height;
    
    AVPacket* packet = av_packet_alloc();
+   if(packet == nullptr)
+	{
+		log_error("%s: av_packet_alloc failed\n", __func__);
+		return -6;
+	}
+   AVPacket_memory_guard packet_guard(&packet);
+   
+   
    //unsigned char* buf = new unsigned char[10 * 1024 * 1024];
-   av_new_packet(packet,size * 3);
+   ret = av_new_packet(packet,size * 3);
+   if(ret < 0)
+	{
+		log_error("%s: av_new_packet failed\n", __func__);
+		return -7;
+	}
+	//这里是否需要释放内存？
    
    int got_picture = 0;
    ret = avcodec_encode_video2(codec_cxt,packet,frame,&got_picture);
    if(ret < 0)
     {
         log_error("%s: avcodec_encode_video2 failed, ret= %d\n", __func__, ret);
-        return -1;
+        return -8;
     }
 
 	log_debug("got_picture %d \n",got_picture);    
@@ -111,15 +128,15 @@ int write_jpg(AVFrame* frame, int width, int height)
         //将packet中的数据写入本地文件
 		ret = av_write_frame(out_cxt, packet);
     }    
-	av_free_packet(packet);	
+	//av_free_packet(packet);	
     //将流尾写入输出媒体文件并释放文件数据
    av_write_trailer(out_cxt);   
    if(frame)
     {
    		av_frame_unref(frame);   		
     }
-	avio_close(out_cxt->pb);	
-   avformat_free_context(out_cxt); 
+	//avio_close(out_cxt->pb);	
+   //avformat_free_context(out_cxt); 
 
 	return  0;
 }
@@ -144,8 +161,6 @@ int ffm(struct h264_data* h264)
 	}	
 	
 	AVFormatContext *ic = nullptr;
-	//const char* file = "rtsp://admin:jns87250605@192.168.108.17:554/h264/ch1/main/av_stream";
-	//const char* file = "test.mp4";
 	//*************************************************************************************
 	// 从内存中读取视频文件
 	ic = avformat_alloc_context();
@@ -154,25 +169,43 @@ int ffm(struct h264_data* h264)
 		log_error("%s: avformat_alloc_context failed\n", __func__);
 		return -2;
 	}
+	AVFormatContext_memory_guard ic_gaurd(&ic);// RAII自动释放内存
+	
 	std::size_t avio_ctx_buffer_size = DATA_SIZE;
 	unsigned char* avio_ctx_buffer = (unsigned char*)av_malloc(avio_ctx_buffer_size);
+	if(avio_ctx_buffer == nullptr)
+	{
+		log_error("%s: avio_ctx_buffer malloc failed\n", __func__);
+		return -3;
+	}
+	//memory_guard guard((void**)&avio_ctx_buffer); //自动释放内存
+	
 //	log_debug("ptr h264= %p\n", h264);
 	AVIOContext* avio_cxt = avio_alloc_context(avio_ctx_buffer, avio_ctx_buffer_size, 0, h264, fill_iobuffer, nullptr, nullptr);
+	if(avio_cxt == nullptr)
+	{
+		log_error("%s: avio_alloc_context failed\n", __func__);
+		return -4;
+	}
+	AVIOContext_memory_guard avio_guard(&avio_cxt);	
+	
 	ic->pb = avio_cxt;
 	ret = avformat_open_input(&ic, NULL, NULL, NULL);
-	//*************************************************************************************
+	//*************************************************************************************	
 	//ret = avformat_open_input(&ic, file, NULL, NULL);
 	if(ret != 0)
 	{
 		log_error("%s: avformat open input failed, ret= %d\n", __func__, ret);
-		return -3;
+		return -5;
 	}
 	log_debug("%s: avformat open input succeed\n", __func__);
+	AVFormatContext_close_guard close_guard(&ic); // RAII自动关闭
+	
 	
 	if(avformat_find_stream_info(ic, NULL) < 0)
 	{
 		log_error("%s: avformat_find_stream_info failed.\n", __func__);
-		return -4;
+		return -6;
 	}
 	log_debug("%s: avformat_find_stream_info succeed.\n", __func__);
 	
@@ -203,7 +236,7 @@ int ffm(struct h264_data* h264)
 	if(video_index == -1)
 	{
 		log_error("%s: video stream not found\n", __func__);
-		return -5;
+		return -7;
 	}
 	
 	AVCodecContext *avc_cxt = ic->streams[video_index]->codec;
@@ -212,18 +245,31 @@ int ffm(struct h264_data* h264)
 	if(codec == nullptr)
 	{
 		log_error("%s: codec not found\n", __func__);
-		return -6;
+		return -8;
 	}
 	
 	ret = avcodec_open2(avc_cxt, codec, nullptr);
 	if(ret < 0)
 	{
 		log_error("%s: open decoder faile, err= %d\n", __func__, ret);
-		return -7;
+		return -9;
 	}	
 	
 	AVPacket *pack = av_packet_alloc();
+	if(pack == nullptr)
+	{
+		log_error("%s: av_packet_alloc failed\n", __func__);
+		return -10;
+	}
+	AVPacket_memory_guard packet_guard(&pack); // 自动释放内存
+	
 	AVFrame *frame = av_frame_alloc();
+	if(frame == nullptr)
+	{
+		log_error("%s: av_frame_alloc failed\n", __func__);
+		return -11;
+	}
+	AVFrame_memory_guard frame_guard(&frame); // 自动释放内存
 	
 	av_init_packet(pack);
 	pack->data = nullptr;
@@ -245,9 +291,9 @@ int ffm(struct h264_data* h264)
 		}
 	}
 	
-	av_frame_free(&frame);
-	av_packet_free(&pack);
+	//av_frame_free(&frame);
+	//av_packet_free(&pack);
 	//avcodec_close();		
-	avformat_close_input(&ic);	
+	//avformat_close_input(&ic);	
 	return 0;
 }
