@@ -6,6 +6,7 @@ set(CMAKE_BUILD_TYPE "Debug")
 #set(CMAKE_CXX_FLAGS "-Wdeprecated-declaraions")
 
 set(CMAKE_EXE_LINKER_FLAGS "-lpthread -lz -lva -lva-drm")
+#set(CMAKE_STATIC_LINKER_FLAGS "-lpthread -lz -lva -lva-drm")
 #set(CMAKE_EXE_LINKER_FLAGS_DEBUG  "-lavcodec -lavformat -lavdevice -lavutil -lavfilter  -lpthread")
 
 set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb")

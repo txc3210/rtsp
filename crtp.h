@@ -174,6 +174,7 @@ public:
 	int stop();
 	bool is_work_done(){return work_done;};
 	int h264_write(const unsigned char* buf, std::size_t size);
+	int h264_write_bytes(const unsigned char* buf, std::size_t size);
 	int save_file();
 	
 	int rtp_pack_parse(const unsigned char* data, std::size_t size);

@@ -92,24 +92,36 @@ int crtp::nalu_parse(const unsigned char* payload, std::size_t payload_num)
 	
 	if(FU_header & 0x80) // NAL的第一个包
 	{
-		//log_debug("%s: seq= %d, FU start flag \n", __func__, last_seq);	
-		offset = 0;
-		NAL_header = (FU_indicator & 0xE0) | (FU_header & 0x1F); 
+		log_debug("%s: seq= %d, FU start flag \n", __func__, last_seq);	
+		NAL_header = (FU_indicator & 0xE0) | (FU_header & 0x1F);
+/*		offset = 0;
+		 
 		NAL[offset] = NAL_header; // 新的header
 		offset++;
+*/		
+		if(NAL_num == 0)
+		{
+			h264_write(SPS, sps_len);			
+			h264_write(PPS, pps_len);			
+			h264_write(SEI, sei_len);				
+		}
+		h264_write(&NAL_header, 1);		
 	}
 	if(FU_header & 0x40) // NAL的最后一个包
 	{
-		//log_debug("%s: set= %d, FU end flag \n", __func__, last_seq);		
+		log_debug("%s: set= %d, FU end flag \n", __func__, last_seq);		
 		NAL_num ++;
 	}
-	
+/*	
 	for(std::size_t num = 0; num < FU_payload_len; num++)
 	{
-		NAL[offset + num] = FU_payload[num];
+		NAL[offset + num] = FU_payload[num];		
 	}
 	offset += FU_payload_len;
+	*/
+	h264_write_bytes(FU_payload, FU_payload_len);	
 	
+/*	
 	if(FU_header & 0x40)
 	{				
 		if(NAL_num == 1)
@@ -119,9 +131,17 @@ int crtp::nalu_parse(const unsigned char* payload, std::size_t payload_num)
 			h264_write(SEI, sei_len);
 		}		
 		h264_write(NAL, offset);			
-//		if(h264.NAL_num == MAX_FRAME_NUM)
-//			save_file();
-	}	
+		if(NAL_num == MAX_FRAME_NUM)
+		{
+			//save_file();
+			log_debug("NAL data: size= %d\n", h264.size);
+			for(int i = 0; i < 100; i++)
+			{			
+				log_debug("%02x ", h264.data[i]);
+			}
+			log_debug("\n");
+		}
+	}	*/
 	return NAL_num;
 }
 
@@ -390,7 +410,7 @@ int crtp::h264_write(const unsigned char* buf, std::size_t size)
 	if((h264.size + size + sizeof(frame_begin_flag)) >= DATA_SIZE) // 剩余空间不足
 	{
 		log_error("%s: no more buffer\n", __func__);
-		return 0;
+		return -1;
 	}
 	for(index = 0; index < sizeof(frame_begin_flag); index++)
 	{
@@ -402,6 +422,24 @@ int crtp::h264_write(const unsigned char* buf, std::size_t size)
 		h264.data[h264.size] = *(buf + index);
 		h264.size++;		
 	}
+//	log_debug("h264.size= %u\n", h264.size);
+	return 0;
+}
+
+int crtp::h264_write_bytes(const unsigned char* buf, std::size_t size)
+{	
+	std::size_t index = 0;
+	if((h264.size + size) >= DATA_SIZE) // 剩余空间不足
+	{
+		log_error("%s: no more buffer\n", __func__);
+		return -1;
+	}	
+	for(index = 0; index < size; index++)
+	{
+		h264.data[h264.size] = *(buf + index);
+		h264.size++;		
+	}
+	//h264.size += size;
 //	log_debug("h264.size= %u\n", h264.size);
 	return 0;
 }

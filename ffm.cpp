@@ -277,6 +277,19 @@ int ffm(struct h264_data* h264)
 	
 	while(av_read_frame(ic, pack) >= 0)
 	{
+		log_debug("pack data: size= %d\n", pack->size);
+		for(int i = 0; i < 100; i++)
+		{			
+			log_debug("%02x ", pack->data[i]);
+		}
+		log_debug("\n");
+		for(int i = 0; i < 100; i++)
+		{			
+			log_debug("%02x ", pack->data[pack->size-i]);
+		}
+		
+		//pack->data = h264->data;
+		//pack->size = h264->size;
 		if(pack && pack->stream_index == video_index)
 		{	
 			int got_frame = 0;
