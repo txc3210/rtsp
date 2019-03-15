@@ -1,4 +1,4 @@
 #pragma once
 
-int ffm();
+int ffm(struct h264_data* h264);
 

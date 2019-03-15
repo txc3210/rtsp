@@ -150,29 +150,54 @@ struct pps_info{
 #define DATA_SIZE	512 * 1024
 struct h264_data
 {
-	unsigned char data[DATA_SIZE];
+	unsigned char* data;
 	std::size_t size;
-	std::size_t NAL_num;
+	
+	//bool work_done;
 };
-extern struct h264_data h264; //用于将视频流数据存储在内存中
+//extern struct h264_data h264; //用于将视频流数据存储在内存中
+
+#define TYPE_SEI		6
+#define TYPE_SPS		7
+#define TYPE_PPS		8
+#define TYPE_FU_A		28
 
 class crtp
 {
 public:
 	crtp();
-	crtp(const std::string& server_ip, unsigned short server_port, unsigned short client_port);
+	//crtp(const std::string& server_ip, unsigned short server_port, unsigned short client_port);
 	~crtp();
-	void init(const std::string& server_ip, unsigned short server_port, unsigned short client_port);
+	int molloc_buffer();
+	int init(const std::string& server_ip, unsigned short server_port, unsigned short client_port);
 	int start();
 	int stop();
 	bool is_work_done(){return work_done;};
+	int h264_write(const unsigned char* buf, std::size_t size);
+	int save_file();
+	
+	int rtp_pack_parse(const unsigned char* data, std::size_t size);
+	int pps_parse(const unsigned char* buf, std::size_t size, struct pps_info* pps);
+	int sps_parse(const unsigned char* buf, std::size_t size, struct sps_info* sps);
+	int nalu_parse(const unsigned char* payload, std::size_t payload_num);
 	//void rtp_recv_thread(int sockfd);
 	bool work_done; // 指示工作内容是否完成
+	struct h264_data h264;	
+	std::size_t NAL_num; // 接收到的NAL数量
+	
+	unsigned char* SPS;
+	unsigned char* PPS;
+	unsigned char* SEI;
+	unsigned char* NAL;
+	
+	std::size_t sps_len;
+	std::size_t pps_len;
+	std::size_t sei_len;
 	
 private:
 	int sockfd;
 	std::string server_ip;
 	unsigned short server_port;
 	unsigned short client_port;
-	
+	unsigned short last_seq; // 最后一次发送的顺序正确的报文序号
 };

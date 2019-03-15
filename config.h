@@ -17,4 +17,9 @@
 
 #define RUN_BACKGROUND			1 // 是否在后面运行
 #define PICTURE_INTERVAL			10 //摄像头拍照周期，单位为分钟
+#define MAX_PICTURE_NUM			1000
+
+#define MAX_FRAME_NUM		8 // 从摄像头读取多少个NAL数据
+
+
 

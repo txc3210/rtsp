@@ -44,9 +44,11 @@ static void run_background(void)
 
 int main(int argc, char* argv[])
 {
+	log_info("Program start running......\n");
 #if RUN_BACKGROUND
 	run_background();
 #endif
+	int picture_num = 0;
 	while(true)
 	{		
 	 	crtsp rtsp("admin", "jns87250605", "192.168.108.17", 554);
@@ -55,11 +57,15 @@ int main(int argc, char* argv[])
 	 	
 	 	while(!rtsp.is_work_done())
 	 	{
-	 		sleep(1);
+	 		usleep(200 * 1000);
 	 	}   
-	 	rtsp.stop();	 	
-	 	ffm();
+	 	rtsp.stop();	 
+	 	picture_num++;	
+	 		 	
+	 	if(picture_num >= MAX_PICTURE_NUM)
+	 		break;
 	 	sleep(PICTURE_INTERVAL * 60 - 8);
+	 	
  	}
 	return 0;
 }

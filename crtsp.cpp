@@ -10,10 +10,6 @@
 #include "log.h"
 #include "md5.h"
 
-
-//RTP首次发送给摄像头的见面礼
-const unsigned char start_cmd[] = {0xce, 0xfa, 0xed, 0xfe};
-
 /********************************************************
 * 功能：构造函数，初始化相关参数
 * 参数：user, 访问摄像头的帐号
@@ -83,23 +79,27 @@ int crtsp::start()
 	{
 		log_error("%s: rtsp setup failed, err= %d\n", __func__, ret);
 		return -5;
+	}	
+
+	ret = rtp.init(rtsp_ip, rtp_port, rtp_client_port);	
+	if(ret < 0)
+	{
+		log_error("%s: rtp.init failed,ret= %u\n", __func__, ret);
+		return -6;
 	}
 	
-	//ret = rtp_init();
-	//crtp rtp(rtsp_ip, rtp_port, rtp_client_port);	
-	rtp.init(rtsp_ip, rtp_port, rtp_client_port);	
 	ret = rtp.start();
 	if(ret != 0)
 	{
 		log_error("%s: rtp start failed, err= %d\n", __func__, ret);
-		return -6;
+		return -7;
 	}
 	
 	ret = play();
 	if(ret != 0)
 	{
 		log_error("%s: rtsp play failed, err= %d\n", __func__, ret);
-		return -7;
+		return -8;
 	}
 	return 0;
 }
@@ -138,8 +138,7 @@ int crtsp::connect_server()
 	{
 		log_error("connect server error:%s(errno:%d)\n", strerror(errno), errno);
 		return -2;
-	}
-	log_debug("connect server succeed, sockfd= %d\n", sockfd);	
+	}	
 	return 0;
 }
 
@@ -245,7 +244,7 @@ int crtsp::options()
 		"User-Agent: Linux program\r\n\r\n",
 		uri.c_str());	
 		
-	log_debug("tcp_send:\n%s", send_buf);
+//	log_debug("tcp_send:\n%s", send_buf);
 	ret = tcp_send(send_buf, len);	
 	if(ret < 0)
 		return -1;
@@ -253,10 +252,9 @@ int crtsp::options()
 	ret = tcp_recv(recv_buf, sizeof(recv_buf));
 	if(ret < 0)
 		return -2;	
-	log_debug("tcp_recv:\n%s\n", recv_buf);	
+//	log_debug("tcp_recv:\n%s\n", recv_buf);	
 	return 0;
 }
-
 
 int crtsp::describe()
 {
@@ -269,11 +267,9 @@ int crtsp::describe()
 		"CSep: 3\r\n"\
 		"User-Agent: Linux program\r\n"\
 		"Accept: application/sdp\r\n\r\n",
-		method.c_str(), uri.c_str());
-		
-	//rtsp_send_recv(sockfd, cmd, strlen(cmd), buf, sizeof(buf));
-	//log_debug("%s\n", buf);	
-	log_debug("tcp_send:\n%s", send_buf);
+		method.c_str(), uri.c_str());		
+	
+//	log_debug("tcp_send:\n%s", send_buf);
 	int ret = tcp_send(send_buf, len);	
 	if(ret < 0)
 		return -1;
@@ -281,11 +277,10 @@ int crtsp::describe()
 	ret = tcp_recv(recv_buf, sizeof(recv_buf));
 	if(ret < 0)
 		return -2;	
-	log_debug("tcp_recv:\n%s\n", recv_buf);		
+//	log_debug("tcp_recv:\n%s\n", recv_buf);		
 	
 	std::string recv(recv_buf);
 	int code = get_response_code(recv);
-//	log_debug("%s: response code is %d\n", __func__, code);
 	if(code != 401)
 	{
 		log_error("%s: response code is %d\n", __func__, code);
@@ -294,19 +289,13 @@ int crtsp::describe()
 	std::string authenticate = get_header_line(recv, "WWW-Authenticate");
 	if(authenticate.empty())
 		return -4;
-//	log_debug("authenticate= %s\n", authenticate.c_str());
 	nonce = get_string_value(authenticate, "nonce");
 	if(nonce.empty())
-		return -5;
-//	log_debug("nonce= %s\n", nonce.c_str());
-	
+		return -5;	
 	realm = get_string_value(authenticate, "realm");
 	if(realm.empty())
-		return -6;
-//	log_debug("realm= %s\n", realm.c_str());
-	
+		return -6;	
 	std::string response = get_response(method);
-//	log_debug("response=%s\n", response.c_str());
 	return 0;
 }
 
@@ -327,7 +316,7 @@ int crtsp::describe_authorized()
 		username.c_str(), realm.c_str(), nonce.c_str(),
 		uri.c_str(), response.c_str());
 		
-	log_debug("tcp_send:\n%s", send_buf);
+//	log_debug("tcp_send:\n%s", send_buf);
 	int ret = tcp_send(send_buf, len);	
 	if(ret < 0)
 		return -1;
@@ -335,7 +324,7 @@ int crtsp::describe_authorized()
 	ret = tcp_recv(recv_buf, sizeof(recv_buf));
 	if(ret < 0)
 		return -2;	
-	log_debug("tcp_recv:\n%s\n", recv_buf);		
+//	log_debug("tcp_recv:\n%s\n", recv_buf);		
 	
 	//提取trackID信息
 	std::string body = get_body(recv_buf);	
@@ -351,7 +340,6 @@ int crtsp::describe_authorized()
 	if(indexR == std::string::npos)
 		return -5;
 	track_id = body.substr(indexL, indexR - indexL);
-	//log_debug("trackID= %s\n", track_id.c_str());	
 	return 0;
 }
 
@@ -372,7 +360,7 @@ int crtsp::setup()
 		username.c_str(), realm.c_str(), nonce.c_str(),
 		uri.c_str(), response.c_str(), rtp_client_port, rtcp_client_port);
 		
-	log_debug("tcp_send:\n%s", send_buf);
+//	log_debug("tcp_send:\n%s", send_buf);
 	int ret = tcp_send(send_buf, len);	
 	if(ret < 0)
 		return -1;
@@ -380,15 +368,12 @@ int crtsp::setup()
 	ret = tcp_recv(recv_buf, sizeof(recv_buf));
 	if(ret < 0)
 		return -2;	
-	log_debug("tcp_recv:\n%s\n", recv_buf);		
+//	log_debug("tcp_recv:\n%s\n", recv_buf);		
 	
 	//从响应消息中提取server_port
 	std::string header(recv_buf);
 	get_server_port(header, &rtp_port, &rtcp_port);
-//	log_debug("rtp_port= %d, rtcp_port= %d\n", rtp_server_port, rtcp_server_port);
-	
 	session = get_session(header);
-//	log_debug("session: %s\n", session.c_str());
 	return 0;
 }
 
@@ -411,7 +396,7 @@ int crtsp::play()
 		username.c_str(), realm.c_str(), nonce.c_str(),
 		uri.c_str(), response.c_str(), session.c_str());
 		
-	log_debug("tcp_send:\n%s", send_buf);
+//	log_debug("tcp_send:\n%s", send_buf);
 	int ret = tcp_send(send_buf, len);	
 	if(ret < 0)
 		return -1;
@@ -419,7 +404,7 @@ int crtsp::play()
 	ret = tcp_recv(recv_buf, sizeof(recv_buf));
 	if(ret < 0)
 		return -2;	
-	log_debug("tcp_recv:\n%s\n", recv_buf);
+//	log_debug("tcp_recv:\n%s\n", recv_buf);
 	return 0;
 }
 
@@ -441,7 +426,7 @@ int crtsp::teardown()
 		username.c_str(), realm.c_str(), nonce.c_str(),
 		uri.c_str(), response.c_str(), session.c_str());
 		
-	log_debug("tcp_send:\n%s", send_buf);
+//	log_debug("tcp_send:\n%s", send_buf);
 	int ret = tcp_send(send_buf, len);	
 	if(ret < 0)
 		return -1;
@@ -449,7 +434,7 @@ int crtsp::teardown()
 	ret = tcp_recv(recv_buf, sizeof(recv_buf));
 	if(ret < 0)
 		return -2;	
-	log_debug("tcp_recv:\n%s\n", recv_buf);
+//	log_debug("tcp_recv:\n%s\n", recv_buf);
 	return 0;
 }
 
@@ -482,7 +467,6 @@ std::string crtsp::get_header_value(const std::string& header, const char* key)
 	}	
 	return sub;
 }
-
 
 int crtsp::get_response_code(const std::string& response)
 {
