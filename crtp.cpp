@@ -18,7 +18,7 @@ crtp::crtp()
 	SPS = nullptr;
 	PPS = nullptr;
 	SEI = nullptr;
-	NAL = nullptr;	
+//	NAL = nullptr;	
 	
 	work_done = false; // 工作内容未完成	
 	NAL_num = 0; // 
@@ -42,8 +42,8 @@ crtp::~crtp()
 	if(SEI != nullptr)
 		delete[] SEI;
 		
-	if(NAL != nullptr)
-		delete[] NAL;
+//	if(NAL != nullptr)
+//		delete[] NAL;
 }
 
 int crtp::molloc_buffer()
@@ -61,9 +61,9 @@ int crtp::molloc_buffer()
 	SEI = new unsigned char[255];
 	if(SEI == nullptr)
 		return -4;
-	NAL = new unsigned char[DATA_SIZE];
-	if(NAL == nullptr)
-		return -5;
+//	NAL = new unsigned char[DATA_SIZE];
+//	if(NAL == nullptr)
+//		return -5;
 	return 0;
 }
 
@@ -94,6 +94,10 @@ int crtp::nalu_parse(const unsigned char* payload, std::size_t payload_num)
 	{
 		log_debug("%s: seq= %d, FU start flag \n", __func__, last_seq);	
 		NAL_header = (FU_indicator & 0xE0) | (FU_header & 0x1F);
+		if((FU_header & 0x1F) == 0x05)
+		{
+			log_debug("This is a I Frame\n");			
+		}
 /*		offset = 0;
 		 
 		NAL[offset] = NAL_header; // 新的header
@@ -106,7 +110,7 @@ int crtp::nalu_parse(const unsigned char* payload, std::size_t payload_num)
 			h264_write(SEI, sei_len);				
 		}
 		h264_write(&NAL_header, 1);		
-	}
+	}	
 	if(FU_header & 0x40) // NAL的最后一个包
 	{
 		log_debug("%s: set= %d, FU end flag \n", __func__, last_seq);		
@@ -262,14 +266,24 @@ int crtp::rtp_pack_parse(const unsigned char* data, std::size_t size)
 	
 	std::size_t CSRC_num = data[0] & 0x0f;
 	unsigned short seq_num = (data[2] << 8) + data[3];
-	if(last_seq == 0)
-		last_seq = seq_num; //  把第一个报文的seq当作起始seq,这里不严谨
+	static std::size_t seq_error_num = 0; // seq错误的次数
+	if(last_seq == 0 || last_seq == 65535)
+		last_seq = seq_num; //  把第一个报文的seq当作起始seq,这里不严谨	
 	else
 	{
 		if(seq_num == (last_seq + 1))
 			last_seq = seq_num;
 		else
-			log_error("%s: this message arrived ahead of schedule\n", __func__);
+		{
+			log_error("%s: this message arrived ahead of schedule, seq= %d\n", __func__, seq_num);
+			seq_error_num++;
+			//报文序号错误次数太多，接受新的序号
+			if(seq_error_num >= 20)
+			{
+				last_seq = seq_num;	
+				seq_error_num = 0;
+			}
+		}
 	}		
 	
 	std::size_t payload_offset = 12 + CSRC_num * 4;

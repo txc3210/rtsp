@@ -189,7 +189,7 @@ public:
 	unsigned char* SPS;
 	unsigned char* PPS;
 	unsigned char* SEI;
-	unsigned char* NAL;
+//	unsigned char* NAL;
 	
 	std::size_t sps_len;
 	std::size_t pps_len;

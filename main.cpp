@@ -64,7 +64,8 @@ int main(int argc, char* argv[])
 	 		 	
 	 	if(picture_num >= MAX_PICTURE_NUM)
 	 		break;
-	 	sleep(PICTURE_INTERVAL * 60 - 8);
+	 	log_info("I will get a picture %d minutes later....\n", PICTURE_INTERVAL);
+	 	sleep(PICTURE_INTERVAL * 60);
 	 	
  	}
 	return 0;

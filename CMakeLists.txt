@@ -1,11 +1,13 @@
 cmake_minimum_required (VERSION 2.8)
 project(rtsp)
-#set(CMAKE_BUILD_TYPE "Release")
-set(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_BUILD_TYPE "Release")
+#set(CMAKE_BUILD_TYPE "Debug")
 
 #set(CMAKE_CXX_FLAGS "-Wdeprecated-declaraions")
 
 set(CMAKE_EXE_LINKER_FLAGS "-lpthread -lz -lva -lva-drm")
+#set(CMAKE_SHARE_LINKER_FLAGS "-lpthread -lz -lva -lva-drm")
+#set(CMAKE_EXE_LINKER_FLAGS "-lavcodec -lavformat -lavdevice -lavutil -lavfilter -lpthread -lz -lva -lva-drm")
 #set(CMAKE_STATIC_LINKER_FLAGS "-lpthread -lz -lva -lva-drm")
 #set(CMAKE_EXE_LINKER_FLAGS_DEBUG  "-lavcodec -lavformat -lavdevice -lavutil -lavfilter  -lpthread")
 
@@ -29,7 +31,13 @@ aux_source_directory(. SRCS)
 
 include_directories("/usr/local/ffmpeg/include")
 link_directories(/usr/local/ffmpeg/lib)
-link_libraries(libavformat.a libavdevice.a libavcodec.a libavfilter.a libavutil.a libswresample.a libswscale.a libX11.so ) 
+#link_libraries(libavformat.a libavdevice.a libavcodec.a libavfilter.a libavutil.a libswresample.a libswscale.a libX11.so ) 
+#link_libraries(libavformat.so libavdevice.so libavcodec.so libavfilter.so libavutil.so libswresample.so libswscale.so libX11.so ) 
+#link_libraries(libavformat.so) 
+
 
 
 add_executable(rtsp ${SRCS})
+
+target_link_libraries(rtsp libavformat.so libavdevice.so libavcodec.so libavfilter.so libavutil.so libswresample.so libswscale.so)
+

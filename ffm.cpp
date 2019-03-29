@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <string>
+#include <memory>
 #include "log.h"
 #include "crtp.h"
 #include <ctime>
@@ -143,7 +144,7 @@ int write_jpg(AVFrame* frame, int width, int height)
 
 int fill_iobuffer(void *opaque, unsigned char* buf, int bufsize)
 {
-//	log_debug("ptr opaque= %p\n", opaque);
+//	log_debug("ptr opaque= %p, buf= %p, size= %d\n", opaque, buf, bufsize);
 	struct h264_data* h264 = reinterpret_cast<struct h264_data*>(opaque);
 	memcpy(buf, h264->data, bufsize);
 	return bufsize;
@@ -172,15 +173,17 @@ int ffm(struct h264_data* h264)
 	AVFormatContext_memory_guard ic_gaurd(&ic);// RAII自动释放内存
 	
 	std::size_t avio_ctx_buffer_size = DATA_SIZE;
+	//std::unique_ptr<unsigned char[]> avio_ptr(new unsigned char[avio_ctx_buffer_size]);
+	//unsigned char* avio_ctx_buffer = avio_ptr.get();
 	unsigned char* avio_ctx_buffer = (unsigned char*)av_malloc(avio_ctx_buffer_size);
 	if(avio_ctx_buffer == nullptr)
 	{
 		log_error("%s: avio_ctx_buffer malloc failed\n", __func__);
 		return -3;
 	}
-	//memory_guard guard((void**)&avio_ctx_buffer); //自动释放内存
+	//memory_guard guard(avio_ctx_buffer); //自动释放内存,这里会吐核,	执行完avformat_open_input后释放才会吐核	
 	
-//	log_debug("ptr h264= %p\n", h264);
+//	log_debug("ptr h264= %p, avio_ctx_buffer= %p\n", h264, avio_ctx_buffer);
 	AVIOContext* avio_cxt = avio_alloc_context(avio_ctx_buffer, avio_ctx_buffer_size, 0, h264, fill_iobuffer, nullptr, nullptr);
 	if(avio_cxt == nullptr)
 	{
@@ -189,8 +192,10 @@ int ffm(struct h264_data* h264)
 	}
 	AVIOContext_memory_guard avio_guard(&avio_cxt);	
 	
-	ic->pb = avio_cxt;
-	ret = avformat_open_input(&ic, NULL, NULL, NULL);
+	ic->pb = avio_cxt;	
+//	log_debug("111\n");
+	ret = avformat_open_input(&ic, NULL, NULL, NULL);	
+//	log_debug("222\n");
 	//*************************************************************************************	
 	//ret = avformat_open_input(&ic, file, NULL, NULL);
 	if(ret != 0)
@@ -198,18 +203,19 @@ int ffm(struct h264_data* h264)
 		log_error("%s: avformat open input failed, ret= %d\n", __func__, ret);
 		return -5;
 	}
+	
 	log_debug("%s: avformat open input succeed\n", __func__);
 	AVFormatContext_close_guard close_guard(&ic); // RAII自动关闭
 	
-	
-	if(avformat_find_stream_info(ic, NULL) < 0)
+//	log_debug("333\n");
+	if(avformat_find_stream_info(ic, nullptr) < 0)
 	{
 		log_error("%s: avformat_find_stream_info failed.\n", __func__);
 		return -6;
 	}
 	log_debug("%s: avformat_find_stream_info succeed.\n", __func__);
-	
-	//log_debug("nb_streams= %u\n", ic->nb_streams);
+//	log_debug("444\n");
+	log_debug("nb_streams= %u\n", ic->nb_streams);
 	
 	AVStream *stream = ic->streams[0];
 	AVCodecContext *context = stream->codec;
@@ -277,6 +283,7 @@ int ffm(struct h264_data* h264)
 	
 	while(av_read_frame(ic, pack) >= 0)
 	{
+	/*
 		log_debug("pack data: size= %d\n", pack->size);
 		for(int i = 0; i < 100; i++)
 		{			
@@ -287,7 +294,7 @@ int ffm(struct h264_data* h264)
 		{			
 			log_debug("%02x ", pack->data[pack->size-i]);
 		}
-		
+		*/
 		//pack->data = h264->data;
 		//pack->size = h264->size;
 		if(pack && pack->stream_index == video_index)
@@ -300,6 +307,7 @@ int ffm(struct h264_data* h264)
 				ret = write_jpg(frame, avc_cxt->width, avc_cxt->height);
 				if(ret == 0)				
 					break;
+				else return ret;
 			}
 		}
 	}

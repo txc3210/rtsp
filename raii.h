@@ -129,18 +129,19 @@ private:
 class memory_guard
 {
 public:
-	memory_guard(void** ptr)
+	memory_guard(void* ptr)
 	{
 		this->ptr = ptr;
 	}
 	~memory_guard()
 	{
-		if(*ptr != nullptr)
+		if(ptr != nullptr)
 		{
-			log_debug("av_free memory....\n");
-			av_free(*ptr);
+			log_debug("av_free memory begin....\n");
+			av_free(ptr);
+			log_debug("av_free memory end....\n");
 		}
 	}
 private:
-	void** ptr;
+	void* ptr;
 };
