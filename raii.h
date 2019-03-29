@@ -125,6 +125,26 @@ private:
 	AVIOContext** context;
 };
 
+// 自动关闭avcodec_open2打开的AVCodecContext对象
+class AVCodecContext_close_guard
+{
+public:
+	AVCodecContext_close_guard(AVCodecContext* context)
+	{
+		this->context = context;
+	}
+	~AVCodecContext_close_guard()
+	{
+		if(context != nullptr)
+		{
+			log_debug("avcodec_close....\n");
+			avcodec_close(context);
+		}
+	}
+private:
+	AVCodecContext* context;
+};
+
 // 自动释放动态分配的AVIOContext对象
 class memory_guard
 {
@@ -145,3 +165,20 @@ public:
 private:
 	void* ptr;
 };
+
+class av_read_frame_guard
+{
+public:
+	av_read_frame_guard(AVPacket* pkt)
+	{
+		this->pkt = pkt;
+	}
+	~av_read_frame_guard()
+	{
+		if(pkt != nullptr)
+			av_packet_unref(pkt);
+	}
+private:
+	AVPacket* pkt;	
+};
+

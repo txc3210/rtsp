@@ -92,6 +92,9 @@ int write_jpg(AVFrame* frame, int width, int height)
 		log_error("%s: avcodec_open2 failed, ret= %d\n", __func__, ret);
 		return -5;
 	}
+	// 自动关闭avcodec_open2打开的对象
+	AVCodecContext_close_guard avcodec_close_guard(codec_cxt); 
+	
 	avcodec_parameters_from_context(stream->codecpar,codec_cxt);
 	//写入文件头
    avformat_write_header(out_cxt, nullptr);
@@ -260,6 +263,8 @@ int ffm(struct h264_data* h264)
 		log_error("%s: open decoder faile, err= %d\n", __func__, ret);
 		return -9;
 	}	
+	// 自动关闭avcodec_open2打开的对象
+	AVCodecContext_close_guard avcodec_close_guard(avc_cxt); 
 	
 	AVPacket *pack = av_packet_alloc();
 	if(pack == nullptr)
@@ -281,8 +286,13 @@ int ffm(struct h264_data* h264)
 	pack->data = nullptr;
 	pack->size = 0;
 	
-	while(av_read_frame(ic, pack) >= 0)
+	while(true)
 	{
+		ret = av_read_frame(ic, pack);
+		if(ret < 0)
+			break;
+		// 自动调用av_packet_unref,防止内存泄露	
+		av_read_frame_guard frame_guard(pack); 
 	/*
 		log_debug("pack data: size= %d\n", pack->size);
 		for(int i = 0; i < 100; i++)
